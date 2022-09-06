@@ -1,3 +1,4 @@
+import urllib3
 from flask import Flask
 from flask_cors import CORS
 
@@ -13,5 +14,7 @@ app_context.push()
 cors = CORS(app)
 
 @app.route('/sendAlarm')
-def hello():
-    return 'Alarm Sended'
+def sendAlarm():
+    http = urllib3.PoolManager()
+    req = http.request('GET', 'https://jsonplaceholder.typicode.com/todos/1')
+    return req.data
