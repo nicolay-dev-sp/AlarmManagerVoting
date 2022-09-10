@@ -1,3 +1,4 @@
+import sys
 from urllib import response
 import urllib3
 import json
@@ -24,36 +25,55 @@ amountOfRetries = 7
 
 @app.route('/sendAlarm')
 def sendAlarmRequest():
-    response1 = sendAlarm(urlServiceOne)
-    response2 = sendAlarm(urlServiceTwo)
-    response3 = sendAlarm(urlServiceThree)
-    status = compareResult(response1, response2, response3)
+    resStatus = 404
+    count = 0
+    if retryHU:
+        while count <= 7 and resStatus == 404:
+            count = count + 1
+            processing = processAlarm()
+            response = processing[0]
+            resStatus = processing[1]
+    else:
+        processing = processAlarm()
+        response = processing[0]
+        resStatus = processing[1]
 
+    return json.dumps(response), resStatus
+
+def processAlarm():
+    if voteTactic:
+        response1 = sendAlarm(urlServiceOne)
+        response2 = sendAlarm(urlServiceTwo)
+        response3 = sendAlarm(urlServiceThree)
+    else:
+        response1 = sendAlarm(urlServiceOne)
+        response2 = response1
+        response3 = response1
+    status = compareResult(response1, response2, response3)
     resStatus = 200
 
     if (status != 'ok'):
-        resStatus = 404
-        if ((response3 != response1) & (response3 != response2) & (response1 != response2)):
+        if ((response3[1] == 404) & (response2[1] == 404) & (response1[1] == 404)):
+            resStatus = 404
             response = buildResponse(status, '', '{} {} {}'.format(urlServiceOne, urlServiceTwo, urlServiceThree))
-        if (response3 == response1 != response2):
-            response = buildResponse(status, response3, urlServiceTwo)
-        if (response3 != response1 == response2):
-            response = buildResponse(status, response1, urlServiceThree)
-        if (response1 != response3 == response2):
-            response = buildResponse(status, response2, urlServiceOne)
+        if (response3[1] == response1[1] != response2[1]):
+            response = buildResponse(status, response3[0], urlServiceTwo)
+        if (response3[1] != response1[1] == response2[1]):
+            response = buildResponse(status, response1[0], urlServiceThree)
+        if (response1[1] != response3[1] == response2[1]):
+            response = buildResponse(status, response2[0], urlServiceOne)
     else:
-        response = buildResponse(status, response1, '')
-    return json.dumps(response), resStatus
+        response = buildResponse(status, response1, '') 
+    return [response, resStatus]
 
 def sendAlarm(url):
     http = urllib3.PoolManager()
     req = http.request('GET', url)
-    result = json.loads(req.data)
-    # validate the response from alarmManager microservice
+    result = [json.loads(req.data), req.status]
     return result
 
 def compareResult(data1, data2, data3):
-    if (data1 == data2 == data3):
+    if (data1[1] == 200 and data2[1] == 200 and data3[1] == 200):
         status = 'ok'
     else:
         status = 'fail'
